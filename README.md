@@ -65,8 +65,54 @@ However the typical starting point is `mid()` which returns a `0|hzzzzzzzzz:` `R
 For the sake of discussion assume that `0|` on a `Rank` is just a static prefix until [Bucket](#bucket) is finally discussed near the end (i.e. it's only relevant under very specific circumstances).
 
 ### Core
+The *core* is a 10 digit base36 string between `0000000000` and `zzzzzzzzzz` (inclusive, kind of) representing `0` to `3_656_158_440_062_975` (which is less than [`Number.MAX_SAFE_INTEGER`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Number/MAX_SAFE_INTEGER) so all the relevant integers can be represented without loss by the double-precision 64-bit binary IEEE 754 format used by [JavaScript `number`s](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Number#number_encoding).
+
+The string can be natively converted to a `number` with [`parseInt(rank.slice(CORE_INDEX, CORE_END), 36)`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/parseInt) while the `core` value is easily converted back to a string with [`core.toString(36).padStart(10, '0')`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Number/toString#radix).
+
+Generating a new *core* value between two non-adjacent existing *core* values should require relatively little processing aside from the string-to-number and number-to-string conversions.
+
+The *core* is the primary, required component of any `rank` for representing it's order position.
+
+Functions like `increment` and `decrement` have an optional `gap` argument which specifies how many positions to "skip" when generating the next value; positions to be occupied by later item insertions (with new ranks generated with `between`). The gap defaults to `8`.
+
+The first item in a new list is typically assigned a rank with `mid()` which will return `0|hzzzzzzzzz:`.
+
+1. `0|hzzzzzzzzz:`
+
+`increment('0|hzzzzzzzzz:')` is used to generate a rank for an appended item.
+
+1. `0|hzzzzzzzzz:`
+2. `0|i000000007:`
+
+When prepending a new item `decrement('0|hzzzzzzzzz:')` is used to generate the appropriate rank.
+
+1. `0|hzzzzzzzzr:`
+2. `0|hzzzzzzzzz:`
+3. `0|i000000007:`
+
+To insert another item between 2 and 3 `between('0|hzzzzzzzzz:','0|i000000007:')` generates the needed rank.
+
+1. `0|hzzzzzzzzr:`
+2. `0|hzzzzzzzzz:`
+3. `0|i000000003:`
+4. `0|i000000007:`
+
+Eventually the situation will arise where a rank between two adjacent core values is needed, e.g. `between('0|i000000002:','0|i000000003:')`:
+
+1. `0|i000000002:`
+1. `0|i000000002:i`
+3. `0|i000000003:`
+4. `0|i000000007:`
 
 ### Suffix
+
+Not all rank values need a *suffix* and ideally most if not all ranks on a list benefit from *not* having a *suffix*. 
+
+However a *suffix* is added once a rank needs to go between two existing ranks with adjacent *core* values. Suffixes make it possible to keep generating new ranks by letting their length grow, to accomodate the trailing characters needed to "preempt" an `after` rank value while still falling after the `before` rank value. 
+
+Generating new ranks between ranks-with-suffix will be slower (and require ever growing strings). To eliminate suffixes, a list should be resequenced as soon as it goes dormant (nobody is manipulating or viewing it) so that all the rank values will be purely based on *core* values, adequately gapped to allow for future insertions of items. 
+
+Suffixes allow rank values to temporarily "go into debt" so that they can continue to serve their intended purpose until such time in the future when the entire list can be resequenced with "clean and gapped" rank values.  
 
 ### Bucket
 
