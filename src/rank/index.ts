@@ -134,7 +134,7 @@ function _decrement(p: RankPart, gap: number, step: number) {
 
 function makeForward(
 	bucket: RankBucket = 0,
-	fromCore: number = CORE.mid,
+	fromCore: number = CORE.initialMin,
 	gap: number = CORE.gap,
 	step: number = DEFAULT_STEP
 ) {
@@ -160,7 +160,7 @@ function makeForward(
 
 function makeReverse(
 	bucket: RankBucket = 0,
-	fromCore: number = CORE.mid,
+	fromCore: number = CORE.initialMax,
 	gap: number = CORE.gap,
 	step: number = DEFAULT_STEP
 ) {

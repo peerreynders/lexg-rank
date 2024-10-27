@@ -6,7 +6,9 @@ import * as r from '../src/rank/index.js';
 const rank = suite('rank');
 
 const CORE_MAX = 3656158440062975;
+const CORE_INITIAL_MIN = Math.pow(36, 9);
 const CORE_MID = Math.trunc(CORE_MAX / 2);
+const CORE_INITIAL_MAX = CORE_MAX - CORE_INITIAL_MIN - CORE_INITIAL_MIN + 1;
 
 rank('"isRank" accepting valid strings', () => {
 	const input = [
@@ -105,6 +107,22 @@ rank('"makeRank" errors', () => {
 });
 
 const coreFromRank = (rank: string) => parseInt(rank.slice(2, 12), 36);
+
+rank('"makeForward" initial default value', () => {
+	const expected = (bucket: r.RankBucket) => r.makeRank(bucket, CORE_INITIAL_MIN);
+
+	assert.is(r.makeForward().next().value, expected(0));
+	assert.is(r.makeForward(1).next().value, expected(1));
+	assert.is(r.makeForward(2, undefined).next().value, expected(2));
+});
+
+rank('"makeReverse" initial default value', () => {
+	const expected = (bucket: r.RankBucket) => r.makeRank(bucket, CORE_INITIAL_MAX);
+
+	assert.is(r.makeReverse().next().value, expected(0));
+	assert.is(r.makeReverse(1).next().value, expected(1));
+	assert.is(r.makeReverse(2, undefined).next().value, expected(2));
+});
 
 const TOWARDS_MAX_EXPECT: Array<string> = [
 	'0|zzzzzzzzzm:',

@@ -1,5 +1,4 @@
 # lexg-rank
-
 *Objective*: Given two (also previously generated) values generate a value in between them that maintains [lexographical ordering](https://en.wikipedia.org/wiki/Lexicographic_order) without having to update the two older values. An oversimplified example would be starting with `A`,`C` and “generating” `B` to arrive at `A`, `B`, `C`.
 
 *Use Case*: A sequencing value for a list that is maintained via drag-and-drop, so that only the sequencing value of the moved item has to be updated.
@@ -114,6 +113,111 @@ Generating new ranks between ranks-with-suffix will be slower (and require ever 
 
 Suffixes allow rank values to temporarily "go into debt" so that they can continue to serve their intended purpose until such time in the future when the entire list can be resequenced with "clean and gapped" rank values.  
 
+… to be continued.
+
 ### Bucket
 
-… to be continued.
+A `Rank` value allows for the presence of a *bucket* but it's simplest when the bucket can just stay with the default of `0`.
+
+The original LexoRank uses buckets when it *rebalances* **live** lists. Only two buckets ((`0`, `1`), (`1`, `2`), or (`2`, `0`)) may exist in the same list at the same time and are used to split the list during *rebalancing*.
+
+For example, a list with bucket `0` ranking values can be rebalanced by gradually resequencing the list *in reverse* with "clean and gapped" bucket `1` ranks. During rebalancing the list can still be viewed in the correct order as the bucket values conform to lexographical ordering. Once rebalancing is complete all ranks in the list will be in bucket `1`. During the next *rebalance* rank values are moved from bucket `1` to `2`.
+
+Finally a list with bucket `2` ranking values is rebalanced into bucket `0`. It's this part of rebalancing that introduces a huge tradeoff; `2` < `0` is not a lexographical order that can be managed with native (i.e. performant) [relational operators](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators#relational_operators).
+
+A list with ranks in bucket `2` and `0` has to be [sorted](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/sort#description) with the custom `compare(rankA: string, rankB: string): number` function instead, where:
+- `1` for `rankB > rankA` 
+- `0` for `rankA === rankB`
+- `-1` for `rankB < rankA`
+
+Note: For a descending sort, use `(rankA, rankB) => compare(rankB, rankA)`.
+
+Forcing the use of the custom `compare` function on general usage just to acommodate lists with both bucket `2` and `0` ranks seems like "poor RoI"; this is why `between` doesn't even support ranks belonging to different buckets. 
+
+However [`lexorank-ts`](https://github.com/kvandake/lexorank-ts) `initial(bucket)` points to another way of using buckets in aligment with native lexographical ordering:
+- `0|1000000000:` for `bucket === 0`
+- `${bucket}|y000000000:` otherwise
+
+So:
+- To *resequence* the ranks of a list start with `0|1000000000:` and replace the existing ranks by using `increment(current)` in order. (Significant room is left for inserting items at the top of the list.)
+- To *recondition* the ranks of a list start with `1|y000000000:` (or `2|y000000000:`) and replace the existing ranks by using `decrement(current)` in **reverse** order. (Significant room is left for appending items at the bottom of the list.)
+
+A list being reconditioned can be viewed (but not manipulated) in its intended order *while* the list is being reconditioned. The constraint is that a list can only be reconditioned twice before it needs to be resequenced.
+
+A list being resequenced can't even be viewed in its intended order *while* the list is being resequenced but once complete is "clean and gapped" with maximum leeway for being reconditioned in the future.
+
+Resequence when possible, recondition when needed; only make your use case as complicated as it needs to be—delay *actually needing* buckets within an implementation for as long as possible. 
+
+### Iterator
+
+The [`IterableIterator`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Iteration_protocols) created by `makeFoward(bucket?, fromCore?, gap?)` can be used to support resequencing of a list. The `fromCore` argument defaults to `1000000000`<sub>36</sub> (leaving room for insertions in front of the list).
+
+The `IterableIterator` created by `makeReverse(bucket?, fromCore?, gap?)` can be used to support reconditioning of a list. The `fromCore` argument defaults to `y000000000`<sub>36</sub> (leaving room for appending items at the end of the list).
+
+Once these iterators exhaust their core values the gap is first interpolated before switching to generating values with suffixes (`increment` and `decrement` behave in an equivalent manner):
+
+```ts
+import { makeForward } from './src/rank/index.js';
+
+const i = makeForward(0, parseInt('zzzzzzzzzm', 36));
+const ranks = Array.from({ length: 14 }, (_v, _i) => {
+  const rank = i.next().value;
+  if (!rank) throw new Error('Never gonna happen TypeScript');
+  return rank;
+});
+
+for (const rank of ranks) console.log(rank);
+```
+
+Output:
+```shell
+0|zzzzzzzzzm:
+0|zzzzzzzzzu:
+0|zzzzzzzzzw:
+0|zzzzzzzzzx:
+0|zzzzzzzzzy:
+0|zzzzzzzzzy:8
+0|zzzzzzzzzy:g
+0|zzzzzzzzzy:o
+0|zzzzzzzzzy:w
+0|zzzzzzzzzy:z8
+0|zzzzzzzzzy:zg
+0|zzzzzzzzzy:zo
+0|zzzzzzzzzy:zw
+0|zzzzzzzzzy:zz8
+```
+
+This illustrates that `max()` doesn't represent the maximum rank; it's simply the maximum rank without a suffix.
+
+```ts
+import { makeReverse } from './src/rank/index.js';
+
+let i = 14;
+for (const rank of makeReverse(1, parseInt('000000000l', 36))) {
+	console.log(rank);
+
+	i -= 1;
+	if (i < 1) break;
+}
+```
+
+Output:
+```shell
+1|000000000l:
+1|000000000d:
+1|0000000005:
+1|0000000002:
+1|0000000001:
+1|0000000001:r
+1|0000000001:j
+1|0000000001:b
+1|0000000001:3
+1|0000000001:0r
+1|0000000001:0j
+1|0000000001:0b
+1|0000000001:03
+1|0000000001:00r
+```
+
+This illustrates that `min()` isn't a useful rank for a list item as it's impossible to generate a rank for an item to go in front of an item with a `min()` rank.
+
