@@ -21,7 +21,7 @@ This is simply an exploration/attempt towards a more lightweight and “good eno
 ```shell
 $ cd lexg-rank
 /lexg-rank$ pnpm install
-Lockfile is up to date, resolution step is skipped
+
 Packages: +9
 +++++++++
 Progress: resolved 9, reused 9, downloaded 0, added 9, done
@@ -32,22 +32,25 @@ devDependencies:
 + typescript 5.6.2
 + uvu 0.5.6
 
-Done in 371ms
+Done in 401ms
 /lexg-rank$ pnpm test
 
 > lexg-rank@0.0.0 test /lexg-rank
-> node --import ts-blank-space/register ./test/index.ts
+> pnpm run exec -- ./test/index.ts
+
+
+> lexg-rank@0.0.0 exec /lexg-rank
+> node --import ts-blank-space/register "--" "./test/index.ts"
 
  digit  • • •   (3 / 3)
  suffix  • • • • • • • • • • • • • • • • • • • • • • • • • • • •   (28 / 28)
  core  • • • • • • • • • • • • • • •   (15 / 15)
- rank  • • • • • • • • • • • • • • • • • • • • • • • •   (24 / 24)
+ rank  • • • • • • • • • • • • • • • • • • • • • • • • • •   (26 / 26)
 
-  Total:     70
-  Passed:    70
+  Total:     72
+  Passed:    72
   Skipped:   0
-  Duration:  31.05ms
-
+  Duration:  22.21ms
 ```
 ---
 
@@ -64,7 +67,7 @@ However the typical starting point is `mid()` which returns a `0|hzzzzzzzzz:` `R
 For the sake of discussion assume that `0|` on a `Rank` is just a static prefix until [Bucket](#bucket) is finally discussed near the end (i.e. it's only relevant under very specific circumstances).
 
 ### Core
-The *core* is a 10 digit base36 string between `0000000000` and `zzzzzzzzzz` (inclusive, kind of) representing `0` to `3_656_158_440_062_975` (which is less than [`Number.MAX_SAFE_INTEGER`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Number/MAX_SAFE_INTEGER) so all the relevant integers can be represented without loss by the double-precision 64-bit binary IEEE 754 format used by [JavaScript `number`s](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Number#number_encoding).
+The *core* is a 10 digit base 36 string between `0000000000` and `zzzzzzzzzz` (inclusive, kind of) representing `0` to `3_656_158_440_062_975` (which is less than [`Number.MAX_SAFE_INTEGER`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Number/MAX_SAFE_INTEGER) so all the relevant integers can be represented without loss by the double-precision 64-bit binary IEEE 754 format used by [JavaScript `number`s](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Number#number_encoding).
 
 The string can be natively converted to a `number` with [`parseInt(rank.slice(CORE_INDEX, CORE_END), 36)`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/parseInt) while the `core` value is easily converted back to a string with [`core.toString(36).padStart(10, '0')`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Number/toString#radix).
 
@@ -113,7 +116,108 @@ Generating new ranks between ranks-with-suffix will be slower (and require ever 
 
 Suffixes allow rank values to temporarily "go into debt" so that they can continue to serve their intended purpose until such time in the future when the entire list can be resequenced with "clean and gapped" rank values.  
 
-… to be continued.
+With [`lexorank-ts`](https://github.com/kvandake/lexorank-ts) (and by extension LexoRank) *core* and *suffix* serve as two distinct parts of the same value. *core* is the fixed width portion (6 digits which can include leading zeros to pad to the required width) and *suffix* the variable width portion that is only used to "fit" a new value in between two adjacent or identical *core* values (though a *suffix* will **never** have trailing zeros). To generate a new value between two LexoRank values the *core* and *suffix* portions are concatenated and then sufficently scaled before being converted to arbitrary width integers with which the mid point is calculated. The process works roughly like this:
+
+<details><summary>Prelude</summary>
+
+```ts
+const CORE_LENGTH = 10;
+const SUFFIX_INDEX = CORE_LENGTH + 1;
+
+const suffixLength = (coreAndSuffix: string) =>
+  coreAndSuffix.length - SUFFIX_INDEX;
+
+const toScaled = (coreAndSuffix: string, scale: number) =>
+  (
+    coreAndSuffix.slice(0, CORE_LENGTH) + coreAndSuffix.slice(SUFFIX_INDEX)
+  ).padEnd(CORE_LENGTH + scale, '0');
+
+const CODE = (() => {
+  const code = {
+    numberMin: '0'.charCodeAt(0),
+    numberMax: '9'.charCodeAt(0),
+    letterMin: 'a'.charCodeAt(0),
+    letterMax: 'z'.charCodeAt(0),
+  };
+  return Object.freeze(code);
+})();
+
+const FIRST_LETTER_INDEX = 10;
+
+function fromDigit(source: string, index: number) {
+  const code = source.charCodeAt(index);
+  return CODE.letterMin <= code && code <= CODE.letterMax
+    ? FIRST_LETTER_INDEX + (code - CODE.letterMin)
+    : code - CODE.numberMin;
+}
+
+function fromString(base36: string) {
+  let value = 0n;
+  for (let i = 0; i < base36.length; i += 1)
+    value = value * 36n + BigInt(fromDigit(base36, i));
+
+  return value;
+}
+
+const TRAILING_ZEROS = /0+$/;
+
+function fromBigInt(value: bigint, scale: number) {
+  const text = value.toString(36);
+  return `${text.slice(0, text.length - scale).padStart(CORE_LENGTH, '0')}:${text.slice(-scale).replace(TRAILING_ZEROS, '')}`;
+}
+```
+
+</details>
+
+```ts
+const before = '0000000001:02r';
+const after = '0000000001:03';
+
+// Scale in preparation for conversion to BigInt
+const bSuffixLength = suffixLength(before);
+const aSuffixLength = suffixLength(after);
+
+const scale =
+  1 + (aSuffixLength > bSuffixLength ? aSuffixLength : bSuffixLength);
+
+// Convert to BigInt
+const bValue = fromString(toScaled(before, scale));
+const aValue = fromString(toScaled(after, scale));
+
+// Calculate mid point
+const betweenValue = bValue + (aValue - bValue) / 2n;
+
+// Convert back to coreAndSuffix
+const between = fromBigInt(betweenValue, scale);
+
+console.log(between); // output: "0000000001:02vi"
+```
+
+[Playground](https://www.typescriptlang.org/play/?target=7#code/MYewdgzgLgBAwgeQEoFED6AZFA5A4gFQAkYBeGARgAYBuAKFElgGUBVAMTYEkANNT7ACIpupeMnRY8RGAGoKdeuGgwIAVwBm6gJYAPDAFMwAcygALUQApQAJ30BBMABMmG7ToBcKqNa3GAlKQAfLQwMDb2Ti6augB0ADaGJuYAtDCsHDx8gsIKDMpQIEzAAIYJjpbhDs6uup7QPsYANColCZ5gqgC2AEb61gEkwaEWIaFhILZVUW4xEHFawPoWlM2IqJg4BIQBcpWRNTqz84sW6Vy8-ELcfqN+MQAOxY4oThZrEpvSchCt+s0A5JR-n5ckpYIghJYLANAjAAN6jPKwUCOfSiBFjGAdHp9ACyvk8gP+MWApmK1jgIFRdigyz8jVGoWxvWsuOKHhg-wAnMTSeTKdTaZR6YyYAkoFA8QTOcVeWSKVT7EKRZjxZLWezCQAvOX8xU0ukM0IAXzooVsUFU1jAMAQ3QAVvpgFAYupbPotUsUfoQbRjX5oaDGDAuEgmPgNvh8CgkFkrqIqAp1KowM6tOAYG6QJ0BFojFpaRAQFbFnVvL4jM1fKiOcy+gEMeNg97REWS-oSfKBUqLNX9Dpfeb9JbrWIhPFh+r8TaADxkFsAMgX41RMDnY5QE4lePZooA-CHOGGI1gozG48JZDArIqYKkIZu1VKwDdMZ4W-eEOO66zfHRjbQtDJqmUDpjaWadEw5bGBY3TFBA+gAMwAGxlg0RgNqM4owAAbqUqhomQlBgGamYTNe2FaKINAwFRM4wHBCEoROxhmNQtGyGQ5CvmMeFxARoh8QJABUMAoTacgAEJ5pwYC0hBub5rSjFIchVZ+L6owWlaNpCfo-6AUiMD4EgdicBg-C4GgABaMYIEwogAPSUDIAAkjlJimaYZhB0lGLJtJ6Z43R5r4UDND8pT6O0XQsphoRGZKOiwGQekxAUUHoRYKGDjA2mjgABq5cJJS6cwLEsKwwKVLFJHeLRRXcjzOFA5K0u8GxSIQAJAn4xruMVNXlScySRQkdy2PccTFCcJlmRZeA2XZTAAsCxoFQZtCOY5MAAEQ-D49xQLtDH6PmkAwKYfT6Iowa9OoEyEZylAva9r3kO4lAAEzWP8dBGcU6jqqIgJvW9H2UIhf2AdtaS-LRNr3JN5LFKBPnkQwOF9BAYHVSAMB+QFt3KN00y6AYrHmGQajRHoiRmLB+gPbYvoA2TdOU62BwU0kFiA+qmlGWNhGjOQV58+zPNmDAsKk9z9PmAexSSwrMDBSrlOabDlJgFj1iwAUBMyXJxOwN0ABq+FPRBmUVhYGW-I4jPM38DXjazYIwMUlv8db1jZrbMEO1FTv830EW-BpCja6UwCqNNkowJ0WjlPcIBhabp1QAA7vohg+wJZAW1b4veyXqTF77AQ7V9JEwztOt62bM0ANZ4+Mkz7LTme9Dnec2mQvnG8pw65-nVsR41QZFgk8QgEYjN94YIIwLDxZQPcqhQJ4u1g+Dn1fThWi7UAA)
+
+While [`BigInt`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/BigInt) is part of [ES2020](https://tc39.es/ecma262/2020/#sec-bigint-objects), operations on `bigint` values are about a magnitude slower than `number` operations. Also unlike [`Number.parseInt(value,36)`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Number/parseInt) `BigInt` doesn't have a native way of parsing base 36 strings (there is a Stage 1 [TC39 proposal](https://github.com/tc39/proposal-number-fromstring) to add this functionality which has been dormant [since 2018](https://github.com/tc39/proposals/blob/main/stage-1-proposals.md)), so any JS-implemented conversion will always be much slower than a native implementation like `parseInt`.
+
+The cumulative cost of these `bigint` conversions and operations could mount quickly if `between`, `decrement` and `increment` were to be used on the hot path. 
+
+The method of *suffix* generation employed by `Rank` is comparatively crude (i.e. inelegant). While using the same base 36 digits, each position of both *suffix*es are scanned left-to-right until one position can be found where a digit (of greater value than the `before` digit but less than the corresponding digit of the `after` *suffix*) can be chosen to create an "in between" *suffix*: 
+
+```ts
+import { assertIsRank, between } from './src/rank/index.js';
+
+const before = '0|0000000001:02r';
+const after = '0|0000000001:03';
+
+assertIsRank(before);
+assertIsRank(after);
+
+console.log(between(before, after)); // output: "0|0000000001:02v"
+```
+
+In the above example this happens when in `before` the `'r'` digit is encountered which is bounded by an implied `'z'` digit. So for that digit `[s,t,u,v,w,x,y,z]` are available. The overridable `step` argument available on operations defaults to `8`; typically this would land the new digit on `'z'` (i.e. `'r' + step`) but because of the `digit + step < 'z'` constraint, the median available digit is chosen instead: `'v'`— leading to a *suffix* of `02v` and a `rank` of `0|0000000001:02v`.
+
+Compare this to the `02vi` *suffix* generated by LexoRank which is the exact middle between `02r0` and `0300`.
+
+The intended trade off with `Rank` is to provide relatively fast value generation *for the majority case*, while assuming that lists will be resequenced frequently enough to keep rank values in lists mostly "clean and gapped".  
 
 ### Bucket
 
@@ -187,17 +291,17 @@ Output:
 0|zzzzzzzzzy:zz8
 ```
 
-This illustrates that `max()` doesn't represent the maximum rank; it's simply the maximum rank without a suffix.
+This illustrates that `max()` doesn't represent the maximum rank; it's simply the maximum rank without a suffix. However given the `increment` behaviour `max()` can serve as the maximum value for comparsion as `max()` won't appear as a value generated by `increment`.
 
 ```ts
 import { makeReverse } from './src/rank/index.js';
 
 let i = 14;
 for (const rank of makeReverse(1, parseInt('000000000l', 36))) {
-	console.log(rank);
+  console.log(rank);
 
-	i -= 1;
-	if (i < 1) break;
+  i -= 1;
+  if (i < 1) break;
 }
 ```
 
@@ -219,5 +323,5 @@ Output:
 1|0000000001:00r
 ```
 
-This illustrates that `min()` isn't a useful rank for a list item as it's impossible to generate a rank for an item to go in front of an item with a `min()` rank.
+This illustrates that `min()` isn't a useful rank for a list item as it's impossible to generate a rank for an item to go in front of an item with a `min()` rank. This is why it will never be generated by the `decrement` behaviour.
 

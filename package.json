@@ -5,7 +5,8 @@
   "scripts": {
     "format": "prettier --write ./src ./test",
     "lint:types": "tsc --noEmit",
-    "test": "node --import ts-blank-space/register ./test/index.ts"
+    "exec": "node --import ts-blank-space/register",
+    "test": "pnpm run exec -- ./test/index.ts"
   },
   "repository": {
     "type": "git",
