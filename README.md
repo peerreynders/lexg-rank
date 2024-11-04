@@ -13,7 +13,9 @@ Sources/Credits:
 - GH: [kvandake/lexorank-ts](https://github.com/kvandake/lexorank-ts) source inspired handling of the rank core value.
 - GH: [Kayron013/LexoRank](https://github.com/Kayron013/LexoRank) source strongly influenced handling of the rank suffix.
 
-TLDR: If you are looking for a LexoRank value generator start with [lexorank](https://www.npmjs.com/package/lexorank). 
+TLDR: If you are looking for a LexoRank value generator start with [lexorank](https://www.npmjs.com/package/lexorank).
+
+Also: [lex-rank](https://github.com/peerreynders/lex-rank); a minimalist variant implemented as a result of this exploration.
 
 This is simply an exploration/attempt towards a more lightweight and “good enough” approach towards generating lexograpically ordered string values based on integers stored in JavaScript's [IEEE 754](https://en.wikipedia.org/wiki/Double-precision_floating-point_format) numbers and digit character codes. The accepted tradeoff was to try to make generation based solely on distinct core values quick relative to operations requiring suffix generation.
 
@@ -194,6 +196,8 @@ console.log(between); // output: "0000000001:02vi"
 ```
 
 [Playground](https://www.typescriptlang.org/play/?target=7#code/MYewdgzgLgBAwgeQEoFED6AZFA5A4gFQAkYBeGARgAYBuAKFElgGUBVAMTYEkANNT7ACIpupeMnRY8RGAGoKdeuGgwIAVwBm6gJYAPDAFMwAcygALUQApQAJ30BBMABMmG7ToBcKqNa3GAlKQAfLQwMDb2Ti6augB0ADaGJuYAtDCsHDx8gsIKDMpQIEzAAIYJjpbhDs6uup7QPsYANColCZ5gqgC2AEb61gEkwaEWIaFhILZVUW4xEHFawPoWlM2IqJg4BIQBcpWRNTqz84sW6Vy8-ELcfqN+MQAOxY4oThZrEpvSchCt+s0A5JR-n5ckpYIghJYLANAjAAN6jPKwUCOfSiBFjGAdHp9ACyvk8gP+MWApmK1jgIFRdigyz8jVGoWxvWsuOKHhg-wAnMTSeTKdTaZR6YyYAkoFA8QTOcVeWSKVT7EKRZjxZLWezCQAvOX8xU0ukM0IAXzooVsUFU1jAMAQ3QAVvpgFAYupbPotUsUfoQbRjX5oaDGDAuEgmPgNvh8CgkFkrqIqAp1KowM6tOAYG6QJ0BFojFpaRAQFbFnVvL4jM1fKiOcy+gEMeNg97REWS-oSfKBUqLNX9Dpfeb9JbrWIhPFh+r8TaADxkFsAMgX41RMDnY5QE4lePZooA-CHOGGI1gozG48JZDArIqYKkIZu1VKwDdMZ4W-eEOO66zfHRjbQtDJqmUDpjaWadEw5bGBY3TFBA+gAMwAGxlg0RgNqM4owAAbqUqhomQlBgGamYTNe2FaKINAwFRM4wHBCEoROxhmNQtGyGQ5CvmMeFxARoh8QJABUMAoTacgAEJ5pwYC0hBub5rSjFIchVZ+L6owWlaNpCfo-6AUiMD4EgdicBg-C4GgABaMYIEwogAPSUDIAAkjlJimaYZhB0lGLJtJ6Z43R5r4UDND8pT6O0XQsphoRGZKOiwGQekxAUUHoRYKGDjA2mjgABq5cJJS6cwLEsKwwKVLFJHeLRRXcjzOFA5K0u8GxSIQAJAn4xruMVNXlScySRQkdy2PccTFCcJlmRZeA2XZTAAsCxoFQZtCOY5MAAEQ-D49xQLtDH6PmkAwKYfT6Iowa9OoEyEZylAva9r3kO4lAAEzWP8dBGcU6jqqIgJvW9H2UIhf2AdtaS-LRNr3JN5LFKBPnkQwOF9BAYHVSAMB+QFt3KN00y6AYrHmGQajRHoiRmLB+gPbYvoA2TdOU62BwU0kFiA+qmlGWNhGjOQV58+zPNmDAsKk9z9PmAexSSwrMDBSrlOabDlJgFj1iwAUBMyXJxOwN0ABq+FPRBmUVhYGW-I4jPM38DXjazYIwMUlv8db1jZrbMEO1FTv830EW-BpCja6UwCqNNkowJ0WjlPcIBhabp1QAA7vohg+wJZAW1b4veyXqTF77AQ7V9JEwztOt62bM0ANZ4+Mkz7LTme9Dnec2mQvnG8pw65-nVsR41QZFgk8QgEYjN94YIIwLDxZQPcqhQJ4u1g+Dn1fThWi7UAA)
+
+(The above code sample gave rise to the implementation of the minimalist [lex-rank](https://github.com/peerreynders/lex-rank) variant.)
 
 While [`BigInt`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/BigInt) is part of [ES2020](https://tc39.es/ecma262/2020/#sec-bigint-objects), operations on `bigint` values are about a magnitude slower than `number` operations. Also unlike [`Number.parseInt(value,36)`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Number/parseInt) `BigInt` doesn't have a native way of parsing base 36 strings (there is a Stage 1 [TC39 proposal](https://github.com/tc39/proposal-number-fromstring) to add this functionality which has been dormant [since 2018](https://github.com/tc39/proposals/blob/main/stage-1-proposals.md)), so any JS-implemented conversion will always be much slower than a native implementation like `parseInt`.
 
